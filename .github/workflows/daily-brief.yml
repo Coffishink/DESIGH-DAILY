@@ -1,11 +1,10 @@
-name: 每日AI简报
+name: 每日设计简报
 
 on:
   schedule:
-    # 注意：GitHub Actions 的 cron 是 UTC 时间，北京时间 = UTC + 8
-    # 每天北京时间早上 07:30（UTC 前一天 23:30）检查一次；
-    # 由下方门禁保证简报每两天实际运行一次，避免 cron 按月份重置造成跨月错位。
-    - cron: '30 23 * * *'
+    # UTC 23:30 = 北京时间 7:30
+    # 周日到周四运行，对应北京时间周一到周五早上
+    - cron: '30 23 * * 0-4'
   workflow_dispatch:        # 允许你在 GitHub 网页上手动点按钮触发，方便测试
 
 jobs:
@@ -31,17 +30,4 @@ jobs:
           QQ_EMAIL: ${{ secrets.QQ_EMAIL }}
           QQ_AUTH_CODE: ${{ secrets.QQ_AUTH_CODE }}
           SEND_TO: ${{ secrets.SEND_TO }}
-        run: |
-          # 自动运行从北京时间 2026-09-16 07:30 开始每两天一次。
-          # workflow_dispatch 始终允许手动测试，不受此门禁影响。
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            START_DAY=$(date -d '2026-09-16' +%s)
-            BEIJING_TODAY=$(TZ=Asia/Shanghai date +%F)
-            TODAY=$(date -d "$BEIJING_TODAY" +%s)
-            DAYS_ELAPSED=$(( (TODAY - START_DAY) / 86400 ))
-            if [ $(( DAYS_ELAPSED % 2 )) -ne 0 ]; then
-              echo "今天不是两天一次的简报日，跳过发送。"
-              exit 0
-            fi
-          fi
-          python run_all.py
+        run: python run_all.py
