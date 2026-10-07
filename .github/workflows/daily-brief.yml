@@ -29,7 +29,6 @@ jobs:
           TEAMOROUTER_API_KEY: ${{ secrets.TEAMOROUTER_API_KEY }}
           HAOAI_API_KEY: ${{ secrets.HAOAI_API_KEY }}
           QQ_EMAIL: ${{ secrets.QQ_EMAIL }}
-          QQ_EMAIL: ${{ secrets.QQ_EMAIL }}
           QQ_AUTH_CODE: ${{ secrets.QQ_AUTH_CODE }}
           SEND_TO: ${{ secrets.SEND_TO }}
         run: |
