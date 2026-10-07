@@ -14,11 +14,7 @@ MAX_RETRIES = 3
 RETRY_WAIT_SECONDS = 60
 
 FETCH_STEPS = [
-    ("抓取 GitHub Trending", "fetchers/fetch_github_trending.py"),
-    ("抓取教务网通知", "fetchers/fetch_jwc_news.py"),
-    ("抓取 Hacker News", "fetchers/fetch_hacker_news.py"),
-    ("抓取科技/AI媒体RSS", "fetchers/fetch_rss_sources.py"),
-    ("抓取经济/政治/科学突破新闻", "fetchers/fetch_category_news.py"),
+    ("抓取设计媒体RSS", "fetchers/fetch_rss_sources.py"),
 ]
 
 steps = FETCH_STEPS + [
