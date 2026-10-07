@@ -2,6 +2,7 @@
 把 daily_brief.md 解析成结构化数据，生成精致的 HTML 卡片邮件发出去
 
 板块：今日总览 / 设计资讯精选 / 今日行动建议 / 问候语
+支持多个收件人：SEND_TO 用英文逗号分隔，例如 a@qq.com,b@gmail.com
 """
 import os
 import re
@@ -12,6 +13,7 @@ from email.header import Header
 QQ_EMAIL = os.environ.get("QQ_EMAIL", "")
 QQ_AUTH_CODE = os.environ.get("QQ_AUTH_CODE", "")
 SEND_TO = os.environ.get("SEND_TO", QQ_EMAIL)
+RECIPIENTS = [addr.strip() for addr in SEND_TO.split(",") if addr.strip()]
 
 SMTP_SERVER = "smtp.qq.com"
 SMTP_PORT = 465
@@ -238,15 +240,15 @@ def send_brief_email():
 
     msg = MIMEText(html_content, "html", "utf-8")
     msg["From"] = QQ_EMAIL
-    msg["To"] = SEND_TO
+    msg["To"] = ", ".join(RECIPIENTS)
     msg["Subject"] = Header(f"每日设计简报 {date}", "utf-8")
 
     try:
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
             server.login(QQ_EMAIL, QQ_AUTH_CODE)
-            server.sendmail(QQ_EMAIL, [SEND_TO], msg.as_string())
+            server.sendmail(QQ_EMAIL, RECIPIENTS, msg.as_string())
 
-        print(f"✅ 简报已发送到 {SEND_TO}")
+        print(f"✅ 简报已发送到 {', '.join(RECIPIENTS)}")
 
     except Exception as e:
         print(f"❌ 发送失败：{e}")
