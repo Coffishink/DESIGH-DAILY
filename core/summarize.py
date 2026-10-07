@@ -34,11 +34,22 @@ import urllib.parse
 import requests
 from datetime import datetime
 
-# ============ DeepSeek API Key：从环境变量读取（GitHub Secrets 里配置） ============
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-# ==========================================================
-
-DEEPSEEK_URL = "https://api.deepseek.com/chat/completions"
+# ============ 双 API 渠道配置 ============
+CHANNELS = [
+    {
+        "name": "TeamoRouter",
+        "url": "https://api.teamorouter.com/v1/chat/completions",
+        "api_key_env": "TEAMOROUTER_API_KEY",
+        "model": "claude-opus-5",          # 你想用的模型，去 TeamoRouter 控制台复制准确名称
+    },
+    {
+        "name": "HaoAI",
+        "url": "https://api.hao.ai/v1/chat/completions",
+        "api_key_env": "HAOAI_API_KEY",
+        "model": "anthropic/claude-opus-5-5",  # HaoAI 的模型名格式，去 HaoAI 控制台确认
+    },
+]
+# =======================================
 
 SCIENCE_TOP_N = 2
 TECH_TOP_N = 6
@@ -143,30 +154,39 @@ def generate_greeting(todo_hint, action_hint):
 
 
 def call_deepseek(prompt, max_retries=4, temperature=0.3):
-    headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    body = {
-        "model": "deepseek-chat",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": temperature,
-    }
     last_error = None
-    for attempt in range(1, max_retries + 1):
-        try:
-            resp = requests.post(DEEPSEEK_URL, headers=headers, json=body, timeout=120)
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"].strip()
-        except Exception as e:
-            last_error = e
-            if attempt < max_retries:
-                wait_seconds = attempt * 5
-                print(f"  ⚠️ 第{attempt}次请求失败（{e}），{wait_seconds}秒后重试...")
-                time.sleep(wait_seconds)
-            else:
-                print(f"  ⚠️ 第{attempt}次请求失败（{e}），放弃")
-    raise last_error
+    for channel in CHANNELS:
+        api_key = os.environ.get(channel["api_key_env"], "")
+        if not api_key:
+            print(f"  ⚠️ 渠道 {channel['name']} 未配置 API Key，跳过")
+            continue
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        body = {
+            "model": channel["model"],
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+        }
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = requests.post(channel["url"], headers=headers, json=body, timeout=120)
+                resp.raise_for_status()
+                print(f"  ✅ 使用渠道：{channel['name']}")
+                return resp.json()["choices"][0]["message"]["content"].strip()
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    wait_seconds = attempt * 5
+                    print(f"  ⚠️ {channel['name']} 第{attempt}次失败（{e}），{wait_seconds}秒后重试...")
+                    time.sleep(wait_seconds)
+                else:
+                    print(f"  ⚠️ {channel['name']} 第{attempt}次失败（{e}），切换到下一个渠道")
+
+    raise last_error if last_error else RuntimeError("所有渠道均失败")
 
 
 def load_json(filename):
