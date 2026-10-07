@@ -40,7 +40,7 @@ CHANNELS = [
         "name": "TeamoRouter",
         "url": "https://api.teamorouter.com/v1/chat/completions",
         "api_key_env": "TEAMOROUTER_API_KEY",
-        "model": "claude-opus-5",          # 你想用的模型，去 TeamoRouter 控制台复制准确名称
+        "model": "gpt-6-astra",          # 你想用的模型，去 TeamoRouter 控制台复制准确名称
     },
     {
         "name": "HaoAI",
