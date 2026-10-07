@@ -4,7 +4,7 @@ on:
   schedule:
     # UTC 23:30 = 北京时间 7:30
     # 周日到周四运行，对应北京时间周一到周五早上
-    - cron: '30 23 * * 0-4'
+    - cron: '0 0 * * 0-4'
   workflow_dispatch:        # 允许你在 GitHub 网页上手动点按钮触发，方便测试
 
 jobs:
