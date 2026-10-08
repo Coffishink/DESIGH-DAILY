@@ -113,7 +113,7 @@ def call_deepseek(prompt, max_retries=4, temperature=0.3):
 
         for attempt in range(1, max_retries + 1):
             try:
-                resp = requests.post(channel["url"], headers=headers, json=body, timeout=120)
+                resp = requests.post(channel["url"], headers=headers, json=body, timeout=300)
                 resp.raise_for_status()
                 print(f"  ✅ 使用渠道：{channel['name']}")
                 return resp.json()["choices"][0]["message"]["content"].strip()
@@ -184,14 +184,20 @@ def summarize_design(rss_data):
     if not rss_data or not rss_data.get("items"):
         return "", ""
 
+    # 每个源最多取8条，避免prompt过长导致API超时
+    by_source = {}
+    for x in rss_data["items"]:
+        src = x.get("source", "")
+        by_source.setdefault(src, []).append(x)
+
     all_lines = []
     item_pool = []
-    for x in rss_data["items"]:
-        title = x.get("title", "")
-        url = x.get("url", "")
-        src = x.get("source", "")
-        all_lines.append(f"- [{src}] {title} (链接: {url})")
-        item_pool.append(x)
+    for src, items in by_source.items():
+        for x in items[:8]:
+            title = x.get("title", "")
+            url = x.get("url", "")
+            all_lines.append(f"- [{src}] {title} (链接: {url})")
+            item_pool.append(x)
 
     combined = "\n".join(all_lines)
 
