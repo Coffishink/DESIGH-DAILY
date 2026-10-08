@@ -3,9 +3,10 @@
 
 结构：
 1. 今日总览（今日一句话 + 设计观察 + 趋势预测）
-2. 设计资讯精选（工作日 15 条，周一 30 条）
-3. 今日行动建议
-4. 问候语
+2. 设计资讯精选（默认 15 条，优质内容多时最多 25 条）
+3. 其他值得一看（标题 + 分类 + 链接，不展开摘要）
+4. 今日行动建议
+5. 问候语
 """
 import json
 import os
@@ -32,9 +33,8 @@ CHANNELS = [
 ]
 # =======================================
 
-# 工作日 15 条，周一 30 条
-DESIGN_TOP_N_DEFAULT = 15
-DESIGN_TOP_N_MONDAY = 30
+DESIGN_TOP_N = 15        # 默认精选条数
+DESIGN_TOP_N_MAX = 25    # 优质内容集中时的上限
 
 NO_RHETORIC_RULE = "语言要求：绝对不要使用任何比喻、拟人、排比等修辞手法，不要写“就像”“仿佛”这类词，直接大白话说清楚事实就行，越直白越好。"
 
@@ -179,10 +179,10 @@ def attach_source_to_lines(text, item_pool):
     return "\n".join(out_lines)
 
 
-def summarize_design(rss_data, top_n, seen_titles=None):
-    """设计资讯精选：给 AI 全部候选，挑出最值得看的 top_n 条"""
+def summarize_design(rss_data):
+    """一次 AI 调用返回两个板块：精选（六段式）+ 其余（三段式）"""
     if not rss_data or not rss_data.get("items"):
-        return ""
+        return "", ""
 
     all_lines = []
     item_pool = []
@@ -195,28 +195,43 @@ def summarize_design(rss_data, top_n, seen_titles=None):
 
     combined = "\n".join(all_lines)
 
-    seen_block = ""
-    if seen_titles:
-        lines = "\n".join(f"- {t}" for t in seen_titles[:40])
-        seen_block = ("另外，下面这些内容已经推送过了，即使换了标题、换了来源，"
-                      "只要讲的是同一件事就绝对不能再选：\n" + lines + "\n\n")
-
     prompt = f"""下面是今天从多个设计媒体抓到的原始信息。请你处理：
 
 1. 把英文标题全部翻译成中文
-2. 判断哪些内容其实在讲同一件事，合并成一条
-3. 严格挑出最值得设计师看的 {top_n} 条，按重要程度从高到低排列
+2. 合并多家媒体报道同一项目的内容，只保留一条，但保留多个来源名
+3. 按下面的规则筛选和分类
 
-行首方括号（如[Design Milk]）表示这条来自哪个媒体，供你判断用，不要写进标题或摘要。
+【精选规则】
+- 默认精选 {DESIGN_TOP_N} 条；如果当天优质内容特别集中，最多可放宽到 {DESIGN_TOP_N_MAX} 条，
+  并在【精选】开头单独一行用一句话说明为什么增加（格式：REASON|||说明原因）
+- 优质内容不足 {DESIGN_TOP_N} 条时，按实际数量输出，不凑数
+- 兼顾视觉、字体、品牌包装、UI与交互、产品与空间设计，不要只集中在某一类
+- 每个来源最多入选 3 条，仍有明显高价值内容时可以突破
+- 优先选具体作品和设计分析，降低纯宣传、导购、重复新闻的优先级
+
+【其余内容】
+- 精选之外，仍然值得一看的内容，附标题、分类和原文链接，不展开摘要
+- 分类从这些里选：视觉、字体、品牌包装、UI与交互、产品、空间、其他
+- 已经在精选里出现过的不再重复
+
+行首方括号（如[Design Milk]）表示这条来自哪个媒体，供你判断用，不要写进标题。
 
 {USER_PROFILE_PRIORITY}
 
-格式严格按（每条一行独占一行，用 ||| 分隔五段，不要加序号或"-"开头）：
+输出格式严格如下（两个板块之间用 【其余】 分隔）：
+
+【精选】
+（可选）REASON|||为什么增加条数的说明
 中文标题|||链接|||关键词标签|||深度摘要|||一句话点评
+（每条一行，不要加序号或"-"开头）
+
+【其余】
+中文标题|||分类|||链接
+（每条一行，不要加序号或"-"开头）
 
 各部分要求：
 - 链接：原样使用对应内容后面给的真实网址，不要编造
-- 关键词标签：2-3个词，逗号分隔（如"品牌视觉,包装设计"）
+- 关键词标签：2-3个词，逗号分隔
 - 深度摘要：用大白话讲清楚"这是什么设计、有什么特点"，18-22字左右
 - 一句话点评：说清楚"为什么值得看、对设计师有什么启发"，20-25字，要具体
 
@@ -226,11 +241,23 @@ def summarize_design(rss_data, top_n, seen_titles=None):
 
 不要写多余的开场白。
 
-{seen_block}原始信息：
+原始信息：
 {combined}
 """
     result = call_deepseek(prompt)
-    return attach_source_to_lines(result, item_pool)
+
+    # 按【其余】切分
+    selected_text = ""
+    more_text = ""
+    if "【其余】" in result:
+        parts = result.split("【其余】", 1)
+        selected_text = parts[0].replace("【精选】", "").strip()
+        more_text = parts[1].strip()
+    else:
+        selected_text = result.replace("【精选】", "").strip()
+
+    selected_with_source = attach_source_to_lines(selected_text, item_pool)
+    return selected_with_source, more_text
 
 
 def summarize_overview(design_text):
@@ -344,21 +371,11 @@ if __name__ == "__main__":
     today = datetime.now().strftime("%Y-%m-%d")
     sections = {}
 
-    # 判断是否周一（按北京时间）
-    beijing_now = datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8)))
-    is_monday = beijing_now.weekday() == 0
-    top_n = DESIGN_TOP_N_MONDAY if is_monday else DESIGN_TOP_N_DEFAULT
-
-    if is_monday:
-        print(f"📅 今天是周一，汇总周末内容，条数设为 {top_n} 条\n")
-    else:
-        print(f"📅 今天工作日，条数设为 {top_n} 条\n")
-
     rss_data = load_json("rss_sources.json")
 
     if rss_data:
-        print(f"正在筛选设计资讯精选（目标 {top_n} 条）...")
-        sections["design"] = summarize_design(rss_data, top_n)
+        print("正在生成设计资讯精选 + 其余目录...")
+        sections["design"], sections["more"] = summarize_design(rss_data)
         print(sections["design"] + "\n")
 
         print("正在生成今日设计总览...")
@@ -385,6 +402,8 @@ if __name__ == "__main__":
         f.write(sections.get("overview", "") + "\n")
         f.write("SECTION|||design\n")
         f.write(sections.get("design", "") + "\n")
+        f.write("SECTION|||more\n")
+        f.write(sections.get("more", "") + "\n")
         f.write("SECTION|||action\n")
         f.write(sections.get("action", "") + "\n")
         f.write("SECTION|||greeting\n")
