@@ -35,7 +35,7 @@ RSS_SOURCES = {
 }
 
 
-def fetch_rss(name, url, max_items=15):
+def fetch_rss(name, url, max_items=50):
     """抓取单个RSS源，返回最新几条"""
     feed = feedparser.parse(url)
 
