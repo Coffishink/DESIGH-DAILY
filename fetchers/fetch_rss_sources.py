@@ -5,8 +5,12 @@
 运行前需要先装：pip install feedparser
 """
 import feedparser
-from datetime import datetime
+import time
+from datetime import datetime, timezone, timedelta
 import json
+
+# 只保留最近几天的内容（超过这个天数的旧文章直接丢弃）
+MAX_AGE_DAYS = 3
 
 # 信息源清单：名字 + RSS地址
 RSS_SOURCES = {
@@ -35,17 +39,33 @@ RSS_SOURCES = {
 }
 
 
+def _is_recent(entry, max_age_days=MAX_AGE_DAYS):
+    """判断这条内容是否在最近 N 天内。解析不出日期时保留（避免误杀）。"""
+    for key in ("published_parsed", "updated_parsed"):
+        parsed = entry.get(key)
+        if parsed:
+            try:
+                entry_ts = time.mktime(parsed)
+                now_ts = datetime.now().timestamp()
+                return (now_ts - entry_ts) <= max_age_days * 86400
+            except Exception:
+                continue
+    # 没有任何日期字段，保留
+    return True
+
+
 def fetch_rss(name, url, max_items=50):
-    """抓取单个RSS源，返回最新几条"""
+    """抓取单个RSS源，返回最近几条（只保留近期内容）"""
     feed = feedparser.parse(url)
 
     if feed.bozo and not feed.entries:
-        # bozo=1 通常表示解析出了点问题，如果还完全没抓到内容，说明这个源可能失效了
         print(f"⚠️ {name} 抓取可能有问题，跳过（{url}）")
         return []
 
     results = []
     for entry in feed.entries[:max_items]:
+        if not _is_recent(entry):
+            continue
         results.append({
             "source": name,
             "title": entry.get("title", ""),
@@ -61,7 +81,7 @@ if __name__ == "__main__":
     for name, url in RSS_SOURCES.items():
         print(f"正在抓取 {name} ...")
         items = fetch_rss(name, url)
-        print(f"  → 抓到 {len(items)} 条")
+        print(f"  → 抓到 {len(items)} 条（近 {MAX_AGE_DAYS} 天内）")
         all_items.extend(items)
 
     print(f"\n总共抓取到 {len(all_items)} 条")
