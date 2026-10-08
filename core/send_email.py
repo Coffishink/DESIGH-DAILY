@@ -40,7 +40,7 @@ def _split_line(line, min_parts):
 def parse_brief(content):
     date = ""
     slot = "morning"
-    keys = ["overview", "design", "action", "greeting"]
+    keys = ["overview", "design", "more", "action", "greeting"]
     sections = {k: "" for k in keys}
     current = None
     for line in content.split("\n"):
@@ -116,6 +116,25 @@ def render_design_cards(text):
             <div style="margin-top:8px;">{tag_badges}</div>
             <div style="font-size:14.5px; color:#555; margin-top:8px; line-height:1.6;">{digest}</div>
             <div style="font-size:13.5px; color:#888; margin-top:8px; line-height:1.6;">💬 {comment}</div>
+        </div>'''
+    return html
+
+
+def render_more_list(text):
+    """三列：标题|||分类|||链接"""
+    html = ""
+    for raw_line in text.split("\n"):
+        line = raw_line.strip()
+        if not line:
+            continue
+        parts = _split_line(line, 3)
+        if not parts or not parts[0]:
+            continue
+        title, category, url = parts[0], parts[1], parts[2] if len(parts) > 2 else ""
+        title_html = f'<a href="{url}" style="color:#222; text-decoration:none; border-bottom:1px dotted #222;">{title}</a>' if url else title
+        category_badge = f'<span style="display:inline-block; background:{COLOR_BG_ACCENT}; color:{COLOR_ACCENT}; font-size:11px; padding:2px 7px; border-radius:6px; margin-right:6px;">{category}</span>' if category else ""
+        html += f'''<div style="padding:8px 0; border-bottom:1px solid #eee;">
+            {category_badge}<span style="font-size:14.5px; color:#333;">{title_html}</span>
         </div>'''
     return html
 
@@ -209,6 +228,10 @@ def build_html(date, slot, sections):
     design_section = f'''<h2 style="font-size:18px; color:{COLOR_DARK}; margin-top:26px;">🎨 设计资讯精选</h2>
     {design_html}''' if design_html else ""
 
+    more_html = render_more_list(sections.get("more", ""))
+    more_section = f'''<h2 style="font-size:18px; color:{COLOR_DARK}; margin-top:26px;">📎 其他值得一看</h2>
+    {more_html}''' if more_html else ""
+    
     return f"""
     <div style="max-width:620px; margin:0 auto; font-family:-apple-system,'PingFang SC',sans-serif;">
         <h1 style="font-size:23px; color:{COLOR_DARK}; margin-bottom:6px;">📋 每日设计简报</h1>
@@ -219,6 +242,8 @@ def build_html(date, slot, sections):
         {overview_html}
 
         {design_section}
+
+        {more_section}
 
         {action_html}
 
