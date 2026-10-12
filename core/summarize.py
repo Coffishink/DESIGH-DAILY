@@ -7,6 +7,11 @@
 3. 其他值得一看（标题 + 分类 + 链接，不展开摘要）
 4. 今日行动建议
 5. 问候语
+
+去重逻辑：
+- 抓取阶段全量抓取，不过滤
+- 总结时过滤掉"今天之前推过"的 URL；今天推过的允许重复推（同一天多次跑结果差不多）
+- 生成成功后，把所有抓到的 URL 标记为今天
 """
 import json
 import os
@@ -35,6 +40,33 @@ CHANNELS = [
 
 DESIGN_TOP_N = 15        # 默认精选条数
 DESIGN_TOP_N_MAX = 25    # 优质内容集中时的上限
+
+# ============ 去重配置 ============
+SEEN_FILE = "seen_articles.json"
+SEEN_MAX_AGE_DAYS = 7
+
+
+def _today_str():
+    return datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
+
+
+def load_seen():
+    """读取已见 URL 字典：{url: 'YYYY-MM-DD'}，清理超过保留期的记录"""
+    try:
+        with open(SEEN_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return {}
+    if isinstance(data, list):
+        return {}
+    cutoff = (datetime.now(timezone(timedelta(hours=8))) - timedelta(days=SEEN_MAX_AGE_DAYS)).strftime("%Y-%m-%d")
+    return {u: d for u, d in data.items() if isinstance(d, str) and d >= cutoff}
+
+
+def save_seen(seen):
+    with open(SEEN_FILE, "w", encoding="utf-8") as f:
+        json.dump(seen, f, ensure_ascii=False, indent=2)
+# =======================================
 
 NO_RHETORIC_RULE = "语言要求：绝对不要使用任何比喻、拟人、排比等修辞手法，不要写“就像”“仿佛”这类词，直接大白话说清楚事实就行，越直白越好。"
 
@@ -184,9 +216,26 @@ def summarize_design(rss_data):
     if not rss_data or not rss_data.get("items"):
         return "", ""
 
+    # 过滤：今天之前推过的 URL 跳过；今天推过的允许重复推
+    today_str = _today_str()
+    seen = load_seen()
+    fresh_items = []
+    for x in rss_data["items"]:
+        u = (x.get("url") or "").strip()
+        d = seen.get(u, "")
+        if d and d < today_str:
+            continue
+        fresh_items.append(x)
+
+    print(f"  过滤后剩 {len(fresh_items)} 条（抓取共 {len(rss_data['items'])} 条）")
+
+    if not fresh_items:
+        print("  ⚠️ 今天没有新内容（全部已推送过）")
+        return "", ""
+
     # 每个源最多取8条，避免prompt过长导致API超时
     by_source = {}
-    for x in rss_data["items"]:
+    for x in fresh_items:
         src = x.get("source", "")
         by_source.setdefault(src, []).append(x)
 
@@ -414,5 +463,16 @@ if __name__ == "__main__":
         f.write(sections.get("action", "") + "\n")
         f.write("SECTION|||greeting\n")
         f.write(sections.get("greeting", "") + "\n")
+
+    # 生成成功：把所有抓到的 URL 标记为"今天推送过"
+    if rss_data and sections.get("design"):
+        seen = load_seen()
+        today_str = _today_str()
+        for x in rss_data["items"]:
+            u = (x.get("url") or "").strip()
+            if u:
+                seen[u] = today_str
+        save_seen(seen)
+        print(f"✅ 已更新 seen_articles.json（当前 {len(seen)} 条）")
 
     print("✅ 简报已生成：daily_brief.md")
