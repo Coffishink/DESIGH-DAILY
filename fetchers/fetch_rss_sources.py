@@ -1,6 +1,9 @@
 """
 抓取多个设计类 RSS 信息源（平面、品牌、字体、UI/UX、建筑、艺术）
-带 URL 去重：7 天内推送过的文章不再重复抓取
+
+去重逻辑：
+- 抓取阶段不做过滤，每次都全量抓取
+- 由 summarize.py 在总结时过滤"今天之前推过的"，并更新 seen_articles.json
 """
 import feedparser
 import time
@@ -41,36 +44,6 @@ RSS_SOURCES = {
 }
 
 
-def load_seen():
-    """读取已见 URL 字典，并清理超过保留期限的旧记录"""
-    try:
-        with open(SEEN_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception:
-        return {}
-
-    # 兼容旧格式（list）
-    if isinstance(data, list):
-        return {}
-
-    now = datetime.now().timestamp()
-    cutoff = now - SEEN_MAX_AGE_DAYS * 86400
-
-    cleaned = {}
-    for url, ts in data.items():
-        try:
-            if float(ts) >= cutoff:
-                cleaned[url] = ts
-        except Exception:
-            continue
-    return cleaned
-
-
-def save_seen(seen_dict):
-    with open(SEEN_FILE, "w", encoding="utf-8") as f:
-        json.dump(seen_dict, f, ensure_ascii=False, indent=2)
-
-
 def _is_recent(entry, max_age_days=MAX_AGE_DAYS):
     """判断这条内容是否在最近 N 天内。解析不出日期时保留（避免误杀）。"""
     for key in ("published_parsed", "updated_parsed"):
@@ -107,24 +80,15 @@ def fetch_rss(name, url, max_items=50):
 
 
 if __name__ == "__main__":
-    seen = load_seen()
-    print(f"已加载 {len(seen)} 条历史记录（保留最近 {SEEN_MAX_AGE_DAYS} 天）")
-
-    now_ts = datetime.now().timestamp()
     all_items = []
 
     for name, url in RSS_SOURCES.items():
         print(f"正在抓取 {name} ...")
         items = fetch_rss(name, url)
-        fresh = [x for x in items if (x.get("url") or "").strip() not in seen]
-        print(f"  → 抓到 {len(items)} 条，其中 {len(fresh)} 条是新的")
-        for x in fresh:
-            u = (x.get("url") or "").strip()
-            if u:
-                seen[u] = now_ts
-        all_items.extend(fresh)
+        print(f"  → 抓到 {len(items)} 条")
+        all_items.extend(items)
 
-    print(f"\n总共抓到 {len(all_items)} 条新内容")
+    print(f"\n总共抓取到 {len(all_items)} 条")
 
     output = {
         "fetched_at": datetime.now().isoformat(),
@@ -134,7 +98,4 @@ if __name__ == "__main__":
     with open("rss_sources.json", "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
 
-    save_seen(seen)
-
-    print(f"已保存到 rss_sources.json（{len(all_items)} 条新内容）")
-    print(f"已更新 seen_articles.json（当前 {len(seen)} 条，自动清理 {SEEN_MAX_AGE_DAYS} 天前的记录）")
+    print(f"已保存到 rss_sources.json（共 {len(all_items)} 条）")
