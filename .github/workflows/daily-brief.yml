@@ -2,7 +2,7 @@ name: 每日设计简报
 
 on:
   schedule:
-    - cron: '33 1 * * *'
+    - cron: '33 19 * * *'
   workflow_dispatch:
 
 jobs:
